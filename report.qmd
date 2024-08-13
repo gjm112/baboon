@@ -1,0 +1,91 @@
+---
+title: "Baboon Teeth Scott Scores"
+author: "Gregory J. Matthews"
+format: html
+editor: visual
+---
+
+## Intro
+
+Words
+
+```{r}
+#| echo: false
+#| message: false
+library(tidyverse)
+library(corrplot)
+scott <- read.csv("/Users/gregorymatthews/Dropbox/baboon_git/scottGreg.csv")
+names(scott) <-
+  c(
+    "id",
+    "sex",
+    "age_cast",
+    "age_death",
+    "sfbrid",
+    "leftright",
+    "BM_cast",
+    "BD_cast",
+    "LM_cast",
+    "LD_cast",
+    "BM_ost",
+    "BD_ost",
+    "LM_ost",
+    "LD_ost"
+  )
+```
+
+```{r}
+summary(scott)
+```
+
+
+
+
+
+
+#Correlations
+
+```{r}
+#| echo: false
+
+m <- cor(scott[,c("BM_cast","BD_cast","LM_cast","LD_cast","BM_ost","BD_ost","LM_ost","LD_ost")])
+corrplot(m, method = 'square', order = 'AOE', addCoef.col = 'white')
+```
+
+# Age vs wear
+
+```{r}
+#| echo: false
+scott_long <- scott %>% pivot_longer(cols = BM_cast:LD_ost) %>% mutate(
+  BL = substring(name, 1, 1),
+  MD = substring(name, 2, 2),
+  BLMD = substring(name, 1, 2),
+  castost = substring(name, 4, nchar(name)),
+  age = ifelse(castost == "cast",age_cast,age_death)
+)
+
+start <- scott_long %>% filter(castost == "ost") %>% mutate(value = 1, age = 1)
+
+scott_long <- rbind(start,scott_long)
+
+#summary(scott)
+ggplot() + geom_path(alpha = 0.5,aes(
+  x = age,
+  y = value,
+  group = id,
+  color = sex
+), data = scott_long) + geom_point(alpha = 0.5,aes(
+  x = age,
+  y = value,
+  group = id,
+  color = sex
+), data = scott_long) + geom_smooth(aes(
+  x = age,
+  y = value,
+  color = sex
+), data = scott_long, color = "black") + facet_grid(BL~MD + sex)
+```
+
+```{r}
+ggplot(aes(x = castost, y = age), data = scott_long %>% filter(age > 1)) + geom_boxplot() + scale_color_discrete(guide="none")
+```

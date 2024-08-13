@@ -1,0 +1,150 @@
+---
+title: "Baboon Tooth Wear"
+author: "Gregory J. Matthews"
+date: "2024-08-01"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+scott <- read.csv("/Users/gregorymatthews/Downloads/scottGreg.csv")
+names(scott) <-
+  c(
+    "id",
+    "sex",
+    "age_cast",
+    "age_death",
+    "sfbrid",
+    "leftright",
+    "BM_cast",
+    "BD_cast",
+    "LM_cast",
+    "LD_cast",
+    "BM_ost",
+    "BD_ost",
+    "LM_ost",
+    "LD_ost"
+  )
+```
+
+## EDA
+```{r}
+#Age distribution
+ggplot(aes(x = age_cast/12), data = scott) + geom_histogram(aes(y = ..density..), bins = 8) + geom_density(color = "black") + theme_bw()
+ggplot(aes(x = age_death/12), data = scott) + geom_histogram(aes(y = ..density..), bins = 8) + geom_density(color = "black") + theme_bw()
+
+#Sex distribution
+ggplot(aes(x = sex, fill = sex), data = scott) + geom_bar()
+scott %>% group_by(sex) %>% summarize(n = n())
+
+```
+
+
+
+```{r}
+#Age dist by sex
+ggplot(aes(x = age_cast/12, fill = sex), data = scott) + geom_histogram(aes(y = ..density..), bins = 8) + geom_density(alpha = 0.5) + theme_bw() + facet_grid(sex~1) + ggtitle("Age at cast")
+
+ggplot(aes(x = age_death/12, fill = sex), data = scott) + geom_histogram(aes(y = ..density..), bins = 8) + geom_density(alpha = 0.5) + theme_bw() + facet_grid(sex~1) + ggtitle("Age at death")
+
+
+```
+
+The sex of the oldest baboons is heavily skewed towards female.  For example, there were 37 baboons that had deaths at 25 or older. Of those 37, 36 were female.  Just something to keep in mind.  
+
+```{r}
+scott %>% filter(age_death/12 >= 25) %>% group_by(sex) %>% summarize(n = n())
+```
+
+
+```{r}
+#Correlations between different parts of the tooth
+cor(scott[,c("BM_cast","BD_cast","LM_cast","LD_cast")])
+cor(scott[,c("BM_ost","BD_ost","LM_ost","LD_ost")])
+```
+
+```{r}
+#Compute wear per month
+scottnew <- scott %>% mutate(totalwearcast = BM_cast + BD_cast +  LM_cast +  LD_cast,
+                             totalweardeath = BM_ost + BD_ost +  LM_ost +  LD_ost,
+                             timedelta = age_death - age_cast,
+                             BM_diff = BM_ost - BM_cast,
+                             BD_diff = BD_ost - BD_cast,
+                             LM_diff = LM_ost - LM_cast,
+                             LD_diff = LD_ost - LD_cast,
+                             totalwearpermonth = (totalweardeath  - totalwearcast)/timedelta)
+
+ggplot(aes(x = totalwearpermonth), data = scottnew) + geom_density()
+```
+
+Do these make sense?  Look at id = 23.  They go from 1s and 2s to 4s and 5s in 7 months.  
+```{r}
+#These observations seem odd to me 
+scottnew %>% filter(totalwearpermonth > 1)
+```
+
+```{r}
+#Are there any observations that wear score gets lower?  Nope!  Good!
+scottnew %>% filter(BM_diff < 0 | BD_diff <0 | LM_diff<0 | LD_diff <0)
+```
+
+
+```{r}
+scottlong <- scott %>% pivot_longer(cols = BM_cast:LD_ost) %>% mutate(
+  BL = substring(name, 1, 1),
+  MD = substring(name, 2, 2),
+  BLMD = substring(name, 1, 2),
+  castost = substring(name, 4, nchar(name)),
+  age = ifelse(castost == "cast",age_cast,age_death)
+)
+
+ggplot(aes(x = age/12,y = value, color = factor(id), group=id), data = scottlong) + geom_path() + geom_point() + theme(legend.position = "none") + facet_grid(BL~MD) 
+
+
+ggplot() + geom_path(alpha = 0.5,aes(
+  x = age/12,
+  y = value,
+  group = id,
+  color = sex
+), data = scottlong) + geom_point(alpha = 0.5,aes(
+  x = age/12,
+  y = value,
+  group = id,
+  color = sex
+), data = scottlong) + geom_smooth(aes(
+  x = age/12,
+  y = value,
+  color = sex
+), data = scottlong, color = "black") + facet_grid(BL~MD + sex) + theme_bw()
+
+ggplot(aes(
+  x = log(age/12),
+  y = log(value),
+  color = sex
+), data = scottlong) + geom_point() +geom_smooth(color = "black") + facet_grid(BL~MD + sex) + ggtitle("log transforms on both x and y")
+
+
+
+
+#If we want to add in wear at the beginning
+#start <- scott %>% filter(castost == "ost") %>% mutate(value = 1, age = 1)
+#scott <- rbind(start,scott)
+
+
+#Onty look at wear and death age
+ggplot(aes(x = age_death, y = value, color = BLMD), data = scottlong %>% filter(castost == "ost")) + geom_point() + geom_smooth()
+
+ggplot(aes(x = age_cast, y = value, color = BLMD), data = scottlong %>% filter(castost == "ost")) + geom_point() + geom_smooth()
+s```
+
+
+```{r}
+#Model age at death vs scott value for each score individualy
+mod_bm <- lm(BM_cast ~ age_death, data = scott)
+summary(mod_bm)
+
+```
