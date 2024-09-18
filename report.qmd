@@ -11,10 +11,7 @@ Baboon teeth
 
 # Questions from Department Chair Krueger
 
-Lastly, here are the questions: 
- - Do wear scores increase with age? (Yes, duh, but we want to test it since we modified the method) 
- - Do wear scores differ by sex? If so, how? (Is this by a specific quadrant? Is this by a side of tooth like buccal side or lingual side?) 
- - Are there any patterns for rate of wear? That is, is there a standard wear through time (by month or year), or are some baboons wearing their teeth down faster that what we might expect?
+Lastly, here are the questions: - Do wear scores increase with age? (Yes, duh, but we want to test it since we modified the method) - Do wear scores differ by sex? If so, how? (Is this by a specific quadrant? Is this by a side of tooth like buccal side or lingual side?) - Are there any patterns for rate of wear? That is, is there a standard wear through time (by month or year), or are some baboons wearing their teeth down faster that what we might expect?
 
 # Exploratory Data Analysis
 
@@ -44,6 +41,7 @@ names(scott) <-
 ```
 
 ## Variable summaries
+
 ```{r}
 summary(scott)
 ```
@@ -52,15 +50,53 @@ summary(scott)
 
 ```{r}
 #| echo: false
+#| message: false
+#| warning: false
 
 m <- cor(scott[,c("BM_cast","BD_cast","LM_cast","LD_cast","BM_ost","BD_ost","LM_ost","LD_ost")])
+
 corrplot(m, method = 'square', order = 'AOE', addCoef.col = 'white')
 ```
+
+Spearman correlations
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+m <- cor(scott[,c("BM_cast","BD_cast","LM_cast","LD_cast","BM_ost","BD_ost","LM_ost","LD_ost")], method = "spearman")
+
+corrplot(m, order = 'AOE', addCoef.col = 'black')
+```
+
+P-values for the Spearman correlation test 
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+#Pair wise test
+x <- scott[,c("BM_cast","BD_cast","LM_cast","LD_cast","BM_ost","BD_ost","LM_ost","LD_ost")]
+
+pvals <- matrix(NA, nrow = 8, ncol = 8)
+for (i in 1:7){
+  for (j in (i+1):8){
+    pvals[i,j] <- cor.test(x[,i],x[,j], method = "spearman")$p.value
+  }
+}
+
+colnames(pvals) <- rownames(pvals) <- c("BM_cast","BD_cast","LM_cast","LD_cast","BM_ost","BD_ost","LM_ost","LD_ost")
+pvals
+
+#Bonferroni cut-off
+```
+The Bonferroni corrected cut off here is `r 0.05/choose(8,2)`.  All of these p-values are well below this cut-off.  
 
 # Data Viz: Age vs wear by sex
 
 ```{r}
 #| echo: false
+#| message: false
+#| warning: false
 scott_long <- scott %>% pivot_longer(cols = BM_cast:LD_ost) %>% mutate(
   BL = substring(name, 1, 1),
   MD = substring(name, 2, 2),
@@ -90,26 +126,38 @@ ggplot() + geom_path(alpha = 0.5,aes(
   color = sex
 ), data = scott_long, color = "black") + facet_grid(BL~MD + sex)
 ```
+
 ## Age distributions by measurement time.
 
 ```{r}
 ggplot(aes(x = castost, y = age), data = scott_long %>% filter(age > 1)) + geom_boxplot() + scale_color_discrete(guide="none")
 ```
 
-## Do wear scores increase with age? (Yes, duh, but we want to test it since we modified the method) 
+## Do wear scores increase with age? (Yes, duh, but we want to test it since we modified the method)
 
-The tests below test the following hypothesis: $H_0: \mu_{cast} = \mu_{ost}$ vs $H_0: \mu_{cast} < \mu_{ost}$ for each location of the tooth individually.  The test used here is a two sample dependent t-test.  In all cases, the null hypothesis is rejected with a p-value less than $2.2 \times 10^{-16}$.  There is statistical evidence that the mean at ost is larger than the mean at cast.   
+The tests below test the following hypothesis: $H_0: \mu_{cast} = \mu_{ost}$ vs $H_0: \mu_{cast} < \mu_{ost}$ for each location of the tooth individually. The test used here is a two sample dependent t-test. In all cases, the null hypothesis is rejected with a p-value less than $2.2 \times 10^{-16}$. There is statistical evidence that the mean at ost is larger than the mean at cast.
 
 ```{r}
+#| message: false
+#| warning: false
 t.test(scott$BM_cast, scott$BM_ost, paired = TRUE, alternative = "less")
 t.test(scott$BD_cast, scott$BD_ost, paired = TRUE, alternative = "less")
 t.test(scott$LM_cast, scott$LM_ost, paired = TRUE, alternative = "less")
 t.test(scott$LD_cast, scott$LD_ost, paired = TRUE, alternative = "less")
 ```
+
+No matter what correction you use here, these are going to be highly significant.  
+
 ## Modeling effect of age
 
-Here are pearson correlation values for you.  But the relationship clearly isn't linear so these probably aren't what you want.  I've also computed Spearman correlation for you, which tests for any kind of monotonic relationship. This is much closer to what you are looking for than Pearson's coefficient.  
+Here are pearson correlation values for you. But the relationship clearly isn't linear so these probably aren't what you want. I've also computed Spearman correlation for you, which tests for any kind of monotonic relationship. This is much closer to what you are looking for than Pearson's coefficient.
+
+### Pearson correlation tests
+I would argue there are 8 tests here in this family so the Bonferroni corrected cut off would be `r 0.05/8`.  
+
 ```{r}
+#| message: false
+#| warning: false
 #Pearson correlation
 cor.test(scott$BM_cast,scott$age_cast)
 cor.test(scott$BD_cast,scott$age_cast)
@@ -120,13 +168,21 @@ cor.test(scott$BM_ost,scott$age_death)
 cor.test(scott$BD_ost,scott$age_death)
 cor.test(scott$LM_ost,scott$age_death)
 cor.test(scott$LD_ost,scott$age_death)
+```
 
+### Spearman correlation tests
+
+
+```{r}
+#| message: false
+#| warning: false
 #Spearman correlation
 cor.test(scott$BM_cast,scott$age_cast, method = "spearman")
 cor.test(scott$BD_cast,scott$age_cast, method = "spearman")
 cor.test(scott$LM_cast,scott$age_cast, method = "spearman")
 cor.test(scott$LD_cast,scott$age_cast, method = "spearman")
 
+#Corelation 
 cor.test(scott$BM_ost,scott$age_death, method = "spearman")
 cor.test(scott$BD_ost,scott$age_death, method = "spearman")
 cor.test(scott$LM_ost,scott$age_death, method = "spearman")
@@ -136,8 +192,9 @@ cor.test(scott$LD_ost,scott$age_death, method = "spearman")
 
 ```
 
-
 ```{r echo = FALSE}
+#| message: false
+#| warning: false
 out <- data.frame(castost = c(rep("cast",4), rep("ost",4)),
            BDLM = rep(c("BM","BD","LM","LD"),2), 
            pvalue = rep(NA,8))
@@ -151,20 +208,16 @@ out$pvalue[6] <- cor.test(scott$BD_ost,scott$age_death, method = "spearman")$p.v
 out$pvalue[7] <- cor.test(scott$LM_ost,scott$age_death, method = "spearman")$p.value
 out$pvalue[8] <- cor.test(scott$LD_ost,scott$age_death, method = "spearman")$p.value
 ```
+### P-values for relationship between wear and age.  
+I would argue there are 8 tests here in this family so the Bonferroni corrected cut off would be `r 0.05/8`.  Using the cut-off, the tests that are significant are for BM cast and age, BD cast and age, and BD ost and age.  
 
 ```{r}
 out %>% pivot_wider(names_from = "BDLM", values_from = "pvalue")
 ```
 
+# Do wear scores differ by sex? If so, how? (Is this by a specific quadrant? Is this by a side of tooth like buccal side or lingual side?)
 
-
-
-
-
-
-# Do wear scores differ by sex? If so, how? (Is this by a specific quadrant? Is this by a side of tooth like buccal side or lingual side?) 
-
-If we ignore age entirely, there are significant differences in the mean vector of wear for males vs females at bost cast and ost.  If we then do individual tests for wear differences by region at cast and ost separately, there are signficant differences in LM and LD at cast and LM at ost.  (I used a 0.05 level of significant and a Bonferroni correction with 8 tests to gets a cut off for significance of 0.00625.  This is, as always, conservative.) 
+If we ignore age entirely, there are significant differences in the mean vector of wear for males vs females at bost cast and ost. If we then do individual tests for wear differences by region at cast and ost separately, there are signficant differences in LM and LD at cast and LM at ost. (I used a 0.05 level of significant and a Bonferroni correction with 8 tests to gets a cut off for significance of 0.00625. This is, as always, conservative.)
 
 ```{r}
 #Look for differences in male vs female with a hotelling t test
@@ -188,15 +241,18 @@ t.test(BD_ost~sex,data = scott)
 t.test(LD_ost~sex,data = scott)
 t.test(LM_ost~sex,data = scott)
 ```
+
 # Modeling without adding in age 1.
-But we should really be controlling for sex and age and id all at once.  So we do that here using the observed data.  I'm assuming linearity of the relationship between age and wear here.  
+
+But we should really be controlling for sex and age and id all at once. So we do that here using the observed data. I'm assuming linearity of the relationship between age and wear here.
 
 ## BM model
+
 ```{r}
 library(lme4)
-mod_bm <- lmer(value ~ age * sex + (1|id), data = scott_long %>% filter(BLMD == "BM" & age > 1))
+mod_bm <- lmer(value ~ age * sex + (1|id), data = scott_long %>% filter(BLMD == "BM" & age > 1), REML = FALSE)
 
-mod_bm_red <- lmer(value ~ age + (1|id), data = scott_long %>% filter(BLMD == "BM" & age > 1))
+mod_bm_red <- lmer(value ~ age + (1|id), data = scott_long %>% filter(BLMD == "BM" & age > 1), REML = FALSE)
 
 #test stat
 -2*(logLik(mod_bm_red) - logLik(mod_bm))
@@ -215,12 +271,14 @@ newxm$yhat <- (predict(mod_bm, newdata = newxm, re.form = ~0))
 
 ggplot(aes(x = age, y = yhat), data = newx) + geom_path(col = "pink", lwd = 2) + geom_point(aes(x = age, y = value, col = sex), data = scott_long %>% filter(BLMD == "BM" & age > 1)) + geom_path(aes(x = age, y = yhat), data = newxm, col = "blue", lwd = 2)
 ```
+
 ## BD Model
+
 ```{r}
 library(lme4)
-mod_bd <- lmer(value ~ age*sex + (1|id), data = scott_long %>% filter(BLMD == "BD"& age > 1))
+mod_bd <- lmer(value ~ age*sex + (1|id), data = scott_long %>% filter(BLMD == "BD"& age > 1), REML = FALSE)
 
-mod_bd_red <- lmer(value ~ age + (1|id), data = scott_long %>% filter(BLMD == "BD"& age > 1))
+mod_bd_red <- lmer(value ~ age + (1|id), data = scott_long %>% filter(BLMD == "BD"& age > 1), REML = FALSE)
 
 #Test stat
 -2*(logLik(mod_bd_red) - logLik(mod_bd))
@@ -241,12 +299,14 @@ ggplot(aes(x = age, y = yhat), data = newx) + geom_path(col = "pink", lwd = 2) +
 
 
 ```
+
 ## LM model
+
 ```{r}
 library(lme4)
-mod_lm <- lmer(value ~ age * sex + (1|id), data = scott_long %>% filter(BLMD == "LM" & age > 1))
+mod_lm <- lmer(value ~ age * sex + (1|id), data = scott_long %>% filter(BLMD == "LM" & age > 1), REML = FALSE)
 
-mod_lm_red <- lmer(value ~ age + (1|id), data = scott_long %>% filter(BLMD == "LM" & age > 1))
+mod_lm_red <- lmer(value ~ age + (1|id), data = scott_long %>% filter(BLMD == "LM" & age > 1), REML = FALSE)
 
 #test stat
 -2*(logLik(mod_lm_red) - logLik(mod_lm))
@@ -265,12 +325,14 @@ newxm$yhat <- (predict(mod_lm, newdata = newxm, re.form = ~0))
 
 ggplot(aes(x = age, y = yhat), data = newx) + geom_path(col = "pink", lwd = 2) + geom_point(aes(x = age, y = value, col = sex), data = scott_long %>% filter(BLMD == "LM" & age > 1)) + geom_path(aes(x = age, y = yhat), data = newxm, col = "blue", lwd = 2)
 ```
+
 ## LD Model
+
 ```{r}
 library(lme4)
-mod_ld <- lmer(value ~ age*sex + (1|id), data = scott_long %>% filter(BLMD == "LD"& age > 1))
+mod_ld <- lmer(value ~ age*sex + (1|id), data = scott_long %>% filter(BLMD == "LD"& age > 1), REML = FALSE)
 
-mod_ld_red <- lmer(value ~ age + (1|id), data = scott_long %>% filter(BLMD == "LD"& age > 1))
+mod_ld_red <- lmer(value ~ age + (1|id), data = scott_long %>% filter(BLMD == "LD"& age > 1), REML = FALSE)
 
 #Test stat
 -2*(logLik(mod_ld_red) - logLik(mod_ld))
@@ -292,16 +354,20 @@ ggplot(aes(x = age, y = yhat), data = newx) + geom_path(col = "pink", lwd = 2) +
 
 ```
 
-
 # Modeling
-But we should really be controlling for sex and age and id all at once and I think we should be looking at age 0.  
+
+But we should really be controlling for sex and age and id all at once and I think we should be looking at age 0.
+
+Need to uses REML = FALSE to compare model.  Reason why:   -https://stats.stackexchange.com/questions/272633/how-to-decide-whether-to-set-reml-to-true-or-false/272654#272654
+ - https://stackoverflow.com/questions/54980399/when-should-i-specify-reml-false-in-lmer
 
 ## BM model
+
 ```{r}
 library(lme4)
-mod_bm <- lmer(value ~ (age+I(age^2)+ I(age^3))*sex + (1|id), data = scott_long %>% filter(BLMD == "BM"))
+mod_bm <- lmer(value ~ (age+I(age^2) + I(age^3))*sex + (1|id), data = scott_long %>% filter(BLMD == "BM"), REML = FALSE)
 
-mod_bm_red <- lmer(value ~ (age+I(age^2)+ I(age^3)) + (1|id), data = scott_long %>% filter(BLMD == "BM"))
+mod_bm_red <- lmer(value ~ (age+I(age^2)+ I(age^3)) + (1|id), data = scott_long %>% filter(BLMD == "BM"), REML = FALSE)
 
 #test stat
 -2*(logLik(mod_bm_red) - logLik(mod_bm))
@@ -320,12 +386,14 @@ newxm$yhat <- (predict(mod_bm, newdata = newxm, re.form = ~0))
 
 ggplot(aes(x = age, y = yhat), data = newx) + geom_path(col = "pink") + geom_point(aes(x = age, y = value, col = sex), data = scott_long %>% filter(BLMD == "BM")) + geom_path(aes(x = age, y = yhat), data = newxm, col = "blue")
 ```
+
 ## BD Model
+
 ```{r}
 library(lme4)
-mod_bd <- lmer(value ~ (age+I(age^2)+ I(age^3))*sex + (1|id), data = scott_long %>% filter(BLMD == "BD"))
+mod_bd <- lmer(value ~ (age+I(age^2)+ I(age^3))*sex + (1|id), data = scott_long %>% filter(BLMD == "BD"), REML = FALSE)
 
-mod_bd_red <- lmer(value ~ (age+I(age^2)+ I(age^3)) + (1|id), data = scott_long %>% filter(BLMD == "BD"))
+mod_bd_red <- lmer(value ~ (age+I(age^2)+ I(age^3)) + (1|id), data = scott_long %>% filter(BLMD == "BD"), REML = FALSE)
 
 #Test stat
 -2*(logLik(mod_bd_red) - logLik(mod_bd))
@@ -348,11 +416,12 @@ ggplot(aes(x = age, y = yhat), data = newx) + geom_path(col = "pink", lwd = 2) +
 ```
 
 ## LM model
+
 ```{r}
 library(lme4)
-mod_lm <- lmer(value ~ (age+I(age^2)+ I(age^3))*sex + (1|id), data = scott_long %>% filter(BLMD == "LM"))
+mod_lm <- lmer(value ~ (age+I(age^2)+ I(age^3))*sex + (1|id), data = scott_long %>% filter(BLMD == "LM"), REML = FALSE)
 
-mod_lm_red <- lmer(value ~ (age+I(age^2)+ I(age^3)) + (1|id), data = scott_long %>% filter(BLMD == "LM"))
+mod_lm_red <- lmer(value ~ (age+I(age^2)+ I(age^3)) + (1|id), data = scott_long %>% filter(BLMD == "LM"), REML = FALSE)
 
 #test stat
 -2*(logLik(mod_lm_red) - logLik(mod_lm))
@@ -371,17 +440,19 @@ newxm$yhat <- (predict(mod_lm, newdata = newxm, re.form = ~0))
 
 ggplot(aes(x = age, y = yhat), data = newx) + geom_path(col = "pink") + geom_point(aes(x = age, y = value, col = sex), data = scott_long %>% filter(BLMD == "LM")) + geom_path(aes(x = age, y = yhat), data = newxm, col = "blue")
 ```
+
 ## BD Model
+
 ```{r}
 library(lme4)
-mod_ld <- lmer(value ~ (age+I(age^2)+ I(age^3))*sex + (1|id), data = scott_long %>% filter(BLMD == "LD"))
+mod_ld <- lmer(value ~ (age+I(age^2)+ I(age^3))*sex + (1|id), data = scott_long %>% filter(BLMD == "LD"), REML = FALSE)
 
-mod_ld_red <- lmer(value ~ (age+I(age^2)+ I(age^3)) + (1|id), data = scott_long %>% filter(BLMD == "LD"))
+mod_ld_red <- lmer(value ~ (age+I(age^2)+ I(age^3)) + (1|id), data = scott_long %>% filter(BLMD == "LD"), REML = FALSE)
 
 #Test stat
 -2*(logLik(mod_ld_red) - logLik(mod_ld))
 #p-value
-1 - pchisq(-2*(logLik(mod_ld) - logLik(mod_ld)),4)
+1 - pchisq(-2*(logLik(mod_ld_red) - logLik(mod_ld)),4)
 
 summary(mod_ld)
 plot(mod_ld)
@@ -400,4 +471,72 @@ ggplot(aes(x = age, y = yhat), data = newx) + geom_path(col = "pink", lwd = 2) +
 
 # Are there any patterns for rate of wear? That is, is there a standard wear through time (by month or year), or are some baboons wearing their teeth down faster that what we might expect?
 
+# Pava
 
+```{r}
+#Overall 
+library(Iso)
+type <- "BM"
+sub <- scott_long %>% filter(BLMD == type) %>% arrange(age) 
+y <- scott_long %>% filter(BLMD == type) %>% arrange(age) %>% pull(value)
+sub$isoy <- pava(y)
+ggplot(aes(x = age, y = value), data = sub) + geom_point() + geom_path(aes(x = age, y = isoy), data = sub, color = "red") + ggtitle(type)
+
+type <- "BD"
+sub <- scott_long %>% filter(BLMD == type) %>% arrange(age) 
+y <- scott_long %>% filter(BLMD == type) %>% arrange(age) %>% pull(value)
+sub$isoy <- pava(y)
+ggplot(aes(x = age, y = value), data = sub) + geom_point() + geom_path(aes(x = age, y = isoy), data = sub, color = "red") + ggtitle(type)
+
+type <- "LM"
+sub <- scott_long %>% filter(BLMD == type) %>% arrange(age) 
+y <- scott_long %>% filter(BLMD == type) %>% arrange(age) %>% pull(value)
+sub$isoy <- pava(y)
+ggplot(aes(x = age, y = value), data = sub) + geom_point() + geom_path(aes(x = age, y = isoy), data = sub, color = "red") + ggtitle(type)
+
+type <- "LD"
+sub <- scott_long %>% filter(BLMD == type) %>% arrange(age) 
+y <- scott_long %>% filter(BLMD == type) %>% arrange(age) %>% pull(value)
+sub$isoy <- pava(y)
+ggplot(aes(x = age, y = value), data = sub) + geom_point() + geom_path(aes(x = age, y = isoy), data = sub, color = "red") + ggtitle(type)
+
+```
+
+<!-- # GCREG -->
+
+<!-- ```{r} -->
+
+<!-- #https://github.com/bonStats/gcreg?tab=readme-ov-file -->
+
+<!-- #Last link in github repo: file:///Users/gregorymatthews/Downloads/monotone-constrained-mixed-effects-models.pdf -->
+
+<!-- library(gcreg) -->
+
+<!-- library(fda) -->
+
+<!-- library(tidyverse) -->
+
+<!-- type <- "BM" -->
+
+<!-- sub <- scott_long %>% filter(BLMD == type) %>% arrange(age)  -->
+
+<!-- test <- cpm(value~age , data = sub, degree = 3, constraint = "monotone", c_region = c(1,404)) -->
+
+<!-- sc <- gen_scale_data_funs(sub$age) -->
+
+<!-- sub$age_scaled <- sc$scale(sub$age) -->
+
+<!-- sc <- gen_scale_data_funs(sub$value) -->
+
+<!-- sub$value_scaled <- sc$scale(sub$value) -->
+
+<!-- md <- gcreg:::make_em_model_specs(value_scaled~age_scaled, data = sub, p_degree = 8, r_degree = 3, r_constrained = F, mcontr_region = c(-1,1), group_name = "id") -->
+
+<!-- quang <- gcreg:::constrained_lmm_em(model = md, tol = 0.1, verbose = T, save_steps = F) -->
+
+<!-- ``` -->
+
+# Notes for Greg
+
+-   https://link.springer.com/article/10.1007/s11222-017-9797-8
+-   https://academic.oup.com/jrsssb/article/83/5/963/7056107
