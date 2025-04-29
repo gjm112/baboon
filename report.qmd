@@ -38,7 +38,60 @@ names(scott) <-
     "LM_ost",
     "LD_ost"
   )
+
+dentin <- read.csv("/Users/gregorymatthews/Dropbox/baboon_git/dentinGreg.csv")
+
+names(dentin) <- c("id", "sex",
+                   "Years_bw_last_mold_and_death",
+                   "sfbrid",
+                   "lr",
+                   "dentin_area_b_death","occ_area_b_death","DER_b_death","PED_b_death",                "dentin_area_b_life","occ_area_b_life","DER_b_life","PED_b_life",
+                                 "dentin_area_a_death","occ_area_a_death","DER_a_death","PED_a_death",                   "dentin_area_a_life","occ_area_a_life","DER_a_life","PED_a_life")
+
+dentin <- dentin[,!is.na(names(dentin))]
+      
+
+
+
+b_death <- dentin %>% select(id:lr,DER_b_death) %>% pivot_longer(names_to = "var", cols = DER_b_death) 
+
+b_life <- dentin %>% select(id:lr,DER_b_life) %>% pivot_longer(names_to = "var", cols = DER_b_life) 
+
+a_death <- dentin %>% select(id:lr,DER_a_death) %>% pivot_longer(names_to = "var", cols = DER_a_death) 
+
+a_life <- dentin %>% select(id:lr,DER_a_life) %>% pivot_longer(names_to = "var", cols = DER_a_life) 
+
+#Pivot Longer
+dentin_long <- bind_rows(b_death, b_life, a_death, a_life)
+
+# Update the names of the variables
+dentin_long <- dentin_long %>% rename(DER = value) %>% mutate(rater = substring(var,5,5),
+     vital_status = substring(var,7,nchar(var)))
+
+# merge on age from the scott data
+dentin_long <- dentin_long %>% left_join(scott %>% select(id, age_cast, age_death), by = "id") 
+
+#Remove records in dentin that are not in the scott score data
+dentin_long <- dentin_long %>% filter(id %in% scott$id)
+
+dentin_long$DER <- as.numeric(dentin_long$DER) 
+#Data are 29.568	14.068
+#But we believe this is a typo and should be 29.568	114.068
+dentin_long$DER[dentin_long$id == 286 & dentin_long$rater == "a" & dentin_long$vital_status == "death"] <- 29.568/114.068
+
+#Create age variable
+dentin_long <- dentin_long %>% mutate(age = ifelse(vital_status == "death", age_death, age_cast))
+
+#Add in dentin wear of 0 at age 0.
+dentin_long <-  bind_rows(dentin_long, dentin_long %>% filter(vital_status == "death") %>% mutate(age = 0, vital_status = "origin", DER = 0))
+
+#remove id 187
+dentin_long <- dentin_long %>% filter(id != 187) 
+scott <- scott %>% filter(id != 187) 
+
 ```
+
+
 
 ## Variable summaries
 
@@ -105,7 +158,7 @@ scott_long <- scott %>% pivot_longer(cols = BM_cast:LD_ost) %>% mutate(
   age = ifelse(castost == "cast",age_cast,age_death)
 )
 
-start <- scott_long %>% filter(castost == "ost") %>% mutate(value = 1, age = 1)
+start <- scott_long %>% filter(castost == "ost") %>% mutate(value = 1, age = 42) %>% mutate(castost = "eruption")
 
 scott_long <- rbind(start,scott_long)
 
@@ -242,124 +295,154 @@ t.test(LD_ost~sex,data = scott)
 t.test(LM_ost~sex,data = scott)
 ```
 
-# Modeling without adding in age 1.
+<!-- # Modeling without adding in age 42. -->
 
-But we should really be controlling for sex and age and id all at once. So we do that here using the observed data. I'm assuming linearity of the relationship between age and wear here.
+<!-- But we should really be controlling for sex and age and id all at once. So we do that here using the observed data. I'm assuming linearity of the relationship between age and wear here. -->
 
-## BM model
+<!-- ## BM model -->
 
-```{r}
-library(lme4)
-mod_bm <- lmer(value ~ age * sex + (1|id), data = scott_long %>% filter(BLMD == "BM" & age > 1), REML = FALSE)
+<!-- ```{r} -->
+<!-- library(lme4) -->
+<!-- mod_bm <- lmer(value ~ age * sex + (1|id), data = scott_long %>% filter(BLMD == "BM" & age > 42), REML = FALSE) -->
 
-mod_bm_red <- lmer(value ~ age + (1|id), data = scott_long %>% filter(BLMD == "BM" & age > 1), REML = FALSE)
+<!-- mod_bm_red <- lmer(value ~ age + (1|id), data = scott_long %>% filter(BLMD == "BM" & age > 42), REML = FALSE) -->
 
-#test stat
--2*(logLik(mod_bm_red) - logLik(mod_bm))
-#p-value
-1 - pchisq(-2*(logLik(mod_bm_red) - logLik(mod_bm)),2)
+<!-- #test stat -->
+<!-- -2*(logLik(mod_bm_red) - logLik(mod_bm)) -->
+<!-- #p-value -->
+<!-- 1 - pchisq(-2*(logLik(mod_bm_red) - logLik(mod_bm)),2) -->
 
-summary(mod_bm)
-plot(mod_bm)
-confint(mod_bm)
+<!-- summary(mod_bm) -->
+<!-- plot(mod_bm) -->
+<!-- confint(mod_bm) -->
 
-newx <- data.frame(age = 85:400, sex = "female")
-newx$yhat <- (predict(mod_bm, newdata = newx, re.form = ~0))
+<!-- newx <- data.frame(age = 85:400, sex = "female") -->
+<!-- newx$yhat <- (predict(mod_bm, newdata = newx, re.form = ~0)) -->
 
-newxm <- data.frame(age = 85:400, sex = "male")
-newxm$yhat <- (predict(mod_bm, newdata = newxm, re.form = ~0))
+<!-- newxm <- data.frame(age = 85:400, sex = "male") -->
+<!-- newxm$yhat <- (predict(mod_bm, newdata = newxm, re.form = ~0)) -->
 
-ggplot(aes(x = age, y = yhat), data = newx) + geom_path(col = "pink", lwd = 2) + geom_point(aes(x = age, y = value, col = sex), data = scott_long %>% filter(BLMD == "BM" & age > 1)) + geom_path(aes(x = age, y = yhat), data = newxm, col = "blue", lwd = 2)
-```
+<!-- ggplot(aes(x = age, y = yhat), data = newx) + geom_path(col = "pink", lwd = 2) + geom_point(aes(x = age, y = value, col = sex), data = scott_long %>% filter(BLMD == "BM" & age > 42)) + geom_path(aes(x = age, y = yhat), data = newxm, col = "blue", lwd = 2) -->
+<!-- ``` -->
 
-## BD Model
+<!-- ## BD Model -->
 
-```{r}
-library(lme4)
-mod_bd <- lmer(value ~ age*sex + (1|id), data = scott_long %>% filter(BLMD == "BD"& age > 1), REML = FALSE)
+<!-- ```{r} -->
+<!-- library(lme4) -->
+<!-- mod_bd <- lmer(value ~ age*sex + (1|id), data = scott_long %>% filter(BLMD == "BD"& age > 42), REML = FALSE) -->
 
-mod_bd_red <- lmer(value ~ age + (1|id), data = scott_long %>% filter(BLMD == "BD"& age > 1), REML = FALSE)
+<!-- mod_bd_red <- lmer(value ~ age + (1|id), data = scott_long %>% filter(BLMD == "BD"& age > 42), REML = FALSE) -->
 
-#Test stat
--2*(logLik(mod_bd_red) - logLik(mod_bd))
-#p-value
-1 - pchisq(-2*(logLik(mod_bd_red) - logLik(mod_bd)),2)
+<!-- #Test stat -->
+<!-- -2*(logLik(mod_bd_red) - logLik(mod_bd)) -->
+<!-- #p-value -->
+<!-- 1 - pchisq(-2*(logLik(mod_bd_red) - logLik(mod_bd)),2) -->
 
-summary(mod_bd)
-plot(mod_bd)
-confint(mod_bd)
+<!-- summary(mod_bd) -->
+<!-- plot(mod_bd) -->
+<!-- confint(mod_bd) -->
 
-newx <- data.frame(age = 1:400, sex = "female")
-newx$yhat <- (predict(mod_bd, newdata = newx, re.form = ~0))
+<!-- newx <- data.frame(age = 1:400, sex = "female") -->
+<!-- newx$yhat <- (predict(mod_bd, newdata = newx, re.form = ~0)) -->
 
-newxm <- data.frame(age = 1:300, sex = "male")
-newxm$yhat <- (predict(mod_bd, newdata = newxm, re.form = ~0))
+<!-- newxm <- data.frame(age = 1:300, sex = "male") -->
+<!-- newxm$yhat <- (predict(mod_bd, newdata = newxm, re.form = ~0)) -->
 
-ggplot(aes(x = age, y = yhat), data = newx) + geom_path(col = "pink", lwd = 2) + geom_point(aes(x = age, y = value, col = sex), data = scott_long %>% filter(BLMD == "BD" & age > 1)) + geom_path(aes(x = age, y = yhat), data = newxm, col = "blue", lwd = 2)
-
-
-```
-
-## LM model
-
-```{r}
-library(lme4)
-mod_lm <- lmer(value ~ age * sex + (1|id), data = scott_long %>% filter(BLMD == "LM" & age > 1), REML = FALSE)
-
-mod_lm_red <- lmer(value ~ age + (1|id), data = scott_long %>% filter(BLMD == "LM" & age > 1), REML = FALSE)
-
-#test stat
--2*(logLik(mod_lm_red) - logLik(mod_lm))
-#p-value
-1 - pchisq(-2*(logLik(mod_lm_red) - logLik(mod_lm)),2)
-
-summary(mod_lm)
-plot(mod_lm)
-confint(mod_lm)
-
-newx <- data.frame(age = 85:400, sex = "female")
-newx$yhat <- (predict(mod_lm, newdata = newx, re.form = ~0))
-
-newxm <- data.frame(age = 85:400, sex = "male")
-newxm$yhat <- (predict(mod_lm, newdata = newxm, re.form = ~0))
-
-ggplot(aes(x = age, y = yhat), data = newx) + geom_path(col = "pink", lwd = 2) + geom_point(aes(x = age, y = value, col = sex), data = scott_long %>% filter(BLMD == "LM" & age > 1)) + geom_path(aes(x = age, y = yhat), data = newxm, col = "blue", lwd = 2)
-```
-
-## LD Model
-
-```{r}
-library(lme4)
-mod_ld <- lmer(value ~ age*sex + (1|id), data = scott_long %>% filter(BLMD == "LD"& age > 1), REML = FALSE)
-
-mod_ld_red <- lmer(value ~ age + (1|id), data = scott_long %>% filter(BLMD == "LD"& age > 1), REML = FALSE)
-
-#Test stat
--2*(logLik(mod_ld_red) - logLik(mod_ld))
-#p-value
-1 - pchisq(-2*(logLik(mod_ld_red) - logLik(mod_ld)),2)
-
-summary(mod_ld)
-plot(mod_ld)
-confint(mod_lm)
-
-newx <- data.frame(age = 85:400, sex = "female")
-newx$yhat <- (predict(mod_ld, newdata = newx, re.form = ~0))
-
-newxm <- data.frame(age = 85:300, sex = "male")
-newxm$yhat <- (predict(mod_ld, newdata = newxm, re.form = ~0))
-
-ggplot(aes(x = age, y = yhat), data = newx) + geom_path(col = "pink", lwd = 2) + geom_point(aes(x = age, y = value, col = sex), data = scott_long %>% filter(BLMD == "LD" & age > 1)) + geom_path(aes(x = age, y = yhat), data = newxm, col = "blue", lwd = 2)
+<!-- ggplot(aes(x = age, y = yhat), data = newx) + geom_path(col = "pink", lwd = 2) + geom_point(aes(x = age, y = value, col = sex), data = scott_long %>% filter(BLMD == "BD" & age > 1)) + geom_path(aes(x = age, y = yhat), data = newxm, col = "blue", lwd = 2) -->
 
 
-```
+<!-- ``` -->
+
+<!-- ## LM model -->
+
+<!-- ```{r} -->
+<!-- library(lme4) -->
+<!-- mod_lm <- lmer(value ~ age * sex + (1|id), data = scott_long %>% filter(BLMD == "LM" & age > 42), REML = FALSE) -->
+
+<!-- mod_lm_red <- lmer(value ~ age + (1|id), data = scott_long %>% filter(BLMD == "LM" & age > 42), REML = FALSE) -->
+
+<!-- #test stat -->
+<!-- -2*(logLik(mod_lm_red) - logLik(mod_lm)) -->
+<!-- #p-value -->
+<!-- 1 - pchisq(-2*(logLik(mod_lm_red) - logLik(mod_lm)),2) -->
+
+<!-- summary(mod_lm) -->
+<!-- plot(mod_lm) -->
+<!-- confint(mod_lm) -->
+
+<!-- newx <- data.frame(age = 85:400, sex = "female") -->
+<!-- newx$yhat <- (predict(mod_lm, newdata = newx, re.form = ~0)) -->
+
+<!-- newxm <- data.frame(age = 85:400, sex = "male") -->
+<!-- newxm$yhat <- (predict(mod_lm, newdata = newxm, re.form = ~0)) -->
+
+<!-- ggplot(aes(x = age, y = yhat), data = newx) + geom_path(col = "pink", lwd = 2) + geom_point(aes(x = age, y = value, col = sex), data = scott_long %>% filter(BLMD == "LM" & age > 1)) + geom_path(aes(x = age, y = yhat), data = newxm, col = "blue", lwd = 2) -->
+<!-- ``` -->
+
+<!-- ## LD Model -->
+
+<!-- ```{r} -->
+<!-- library(lme4) -->
+<!-- mod_ld <- lmer(value ~ age*sex + (1|id), data = scott_long %>% filter(BLMD == "LD"& age > 42), REML = FALSE) -->
+
+<!-- mod_ld_red <- lmer(value ~ age + (1|id), data = scott_long %>% filter(BLMD == "LD"& age > 42), REML = FALSE) -->
+
+<!-- #Test stat -->
+<!-- -2*(logLik(mod_ld_red) - logLik(mod_ld)) -->
+<!-- #p-value -->
+<!-- 1 - pchisq(-2*(logLik(mod_ld_red) - logLik(mod_ld)),2) -->
+
+<!-- summary(mod_ld) -->
+<!-- plot(mod_ld) -->
+<!-- confint(mod_lm) -->
+
+<!-- newx <- data.frame(age = 85:400, sex = "female") -->
+<!-- newx$yhat <- (predict(mod_ld, newdata = newx, re.form = ~0)) -->
+
+<!-- newxm <- data.frame(age = 85:300, sex = "male") -->
+<!-- newxm$yhat <- (predict(mod_ld, newdata = newxm, re.form = ~0)) -->
+
+<!-- ggplot(aes(x = age, y = yhat), data = newx) + geom_path(col = "pink", lwd = 2) + geom_point(aes(x = age, y = value, col = sex), data = scott_long %>% filter(BLMD == "LD" & age > 1)) + geom_path(aes(x = age, y = yhat), data = newxm, col = "blue", lwd = 2) -->
+
+
+<!-- ``` -->
 
 # Modeling
 
-But we should really be controlling for sex and age and id all at once and I think we should be looking at age 0.
+## Scott Scores
+
+But we should really be controlling for sex and age and id all at once and I think we should be looking at age at eruption with wear of 0.
 
 Need to uses REML = FALSE to compare model.  Reason why:   -https://stats.stackexchange.com/questions/272633/how-to-decide-whether-to-set-reml-to-true-or-false/272654#272654
  - https://stackoverflow.com/questions/54980399/when-should-i-specify-reml-false-in-lmer
+
+## Scott Score overall 
+
+```{r}
+library(lme4)
+scott_long_sum <- scott_long %>% group_by(id, castost, age, sex) %>% summarize(value = sum(value)) 
+
+mod_all_full <- lmer(value ~ (age+I(age^2) + I(age^3))*sex + (1|id), data = scott_long_sum, REML = FALSE)
+
+mod_all_red <- lmer(value ~ (age+I(age^2)+ I(age^3)) + (1|id), data = scott_long_sum, REML = FALSE)
+
+#test stat
+-2*(logLik(mod_all_red) - logLik(mod_all_full))
+#p-value
+1 - pchisq(-2*(logLik(mod_all_red) - logLik(mod_all_full)),4)
+
+summary(mod_all_full)
+plot(mod_all_full)
+confint(mod_all_full) 
+
+newx <- data.frame(age = 42:400, sex = "female")
+newx$yhat <- (predict(mod_all_full, newdata = newx, re.form = ~0))
+
+newxm <- data.frame(age = 42:300, sex = "male")
+newxm$yhat <- (predict(mod_all_full, newdata = newxm, re.form = ~0))
+
+ggplot(aes(x = age, y = yhat), data = newx) + geom_path(col = "pink", lwd = 2) + geom_point(aes(x = age, y = value, col = sex), data = scott_long_sum) + geom_path(aes(x = age, y = yhat), data = newxm, col = "blue", lwd = 2) + ggtitle("Scott Score - Overall")
+```
 
 ## BM model
 
@@ -376,15 +459,15 @@ mod_bm_red <- lmer(value ~ (age+I(age^2)+ I(age^3)) + (1|id), data = scott_long 
 
 summary(mod_bm)
 plot(mod_bm)
-confint(mod_bm)
+confint(mod_bm) 
 
-newx <- data.frame(age = 1:400, sex = "female")
+newx <- data.frame(age = 42:400, sex = "female")
 newx$yhat <- (predict(mod_bm, newdata = newx, re.form = ~0))
 
-newxm <- data.frame(age = 1:300, sex = "male")
+newxm <- data.frame(age = 42:300, sex = "male")
 newxm$yhat <- (predict(mod_bm, newdata = newxm, re.form = ~0))
 
-ggplot(aes(x = age, y = yhat), data = newx) + geom_path(col = "pink") + geom_point(aes(x = age, y = value, col = sex), data = scott_long %>% filter(BLMD == "BM")) + geom_path(aes(x = age, y = yhat), data = newxm, col = "blue")
+ggplot(aes(x = age, y = yhat), data = newx) + geom_path(col = "pink", lwd = 2) + geom_point(aes(x = age, y = value, col = sex), data = scott_long %>% filter(BLMD == "BM")) + geom_path(aes(x = age, y = yhat), data = newxm, col = "blue", lwd = 2) + ggtitle("Scott Score - BM")
 ```
 
 ## BD Model
@@ -404,13 +487,13 @@ summary(mod_bd)
 plot(mod_bd)
 confint(mod_bm)
 
-newx <- data.frame(age = 1:400, sex = "female")
+newx <- data.frame(age = 42:400, sex = "female")
 newx$yhat <- (predict(mod_bd, newdata = newx, re.form = ~0))
 
-newxm <- data.frame(age = 1:300, sex = "male")
+newxm <- data.frame(age = 42:300, sex = "male")
 newxm$yhat <- (predict(mod_bd, newdata = newxm, re.form = ~0))
 
-ggplot(aes(x = age, y = yhat), data = newx) + geom_path(col = "pink", lwd = 2) + geom_point(aes(x = age, y = value, col = sex), data = scott_long %>% filter(BLMD == "BD")) + geom_path(aes(x = age, y = yhat), data = newxm, col = "blue", lwd = 2)
+ggplot(aes(x = age, y = yhat), data = newx) + geom_path(col = "pink", lwd = 2) + geom_point(aes(x = age, y = value, col = sex), data = scott_long %>% filter(BLMD == "BD")) + geom_path(aes(x = age, y = yhat), data = newxm, col = "blue", lwd = 2) + ggtitle("Scott Score - BD")
 
 
 ```
@@ -438,10 +521,10 @@ newx$yhat <- (predict(mod_lm, newdata = newx, re.form = ~0))
 newxm <- data.frame(age = 1:300, sex = "male")
 newxm$yhat <- (predict(mod_lm, newdata = newxm, re.form = ~0))
 
-ggplot(aes(x = age, y = yhat), data = newx) + geom_path(col = "pink") + geom_point(aes(x = age, y = value, col = sex), data = scott_long %>% filter(BLMD == "LM")) + geom_path(aes(x = age, y = yhat), data = newxm, col = "blue")
+ggplot(aes(x = age, y = yhat), data = newx) + geom_path(col = "pink") + geom_point(aes(x = age, y = value, col = sex), data = scott_long %>% filter(BLMD == "LM")) + geom_path(aes(x = age, y = yhat), data = newxm, col = "blue") + ggtitle("Scott Score - LM")
 ```
 
-## BD Model
+## LD Model
 
 ```{r}
 library(lme4)
@@ -458,47 +541,233 @@ summary(mod_ld)
 plot(mod_ld)
 confint(mod_bm)
 
-newx <- data.frame(age = 1:400, sex = "female")
+newx <- data.frame(age = 42:400, sex = "female")
 newx$yhat <- (predict(mod_ld, newdata = newx, re.form = ~0))
 
-newxm <- data.frame(age = 1:300, sex = "male")
+newxm <- data.frame(age = 42:300, sex = "male")
 newxm$yhat <- (predict(mod_ld, newdata = newxm, re.form = ~0))
 
-ggplot(aes(x = age, y = yhat), data = newx) + geom_path(col = "pink", lwd = 2) + geom_point(aes(x = age, y = value, col = sex), data = scott_long %>% filter(BLMD == "LD")) + geom_path(aes(x = age, y = yhat), data = newxm, col = "blue", lwd = 2)
+ggplot(aes(x = age, y = yhat), data = newx) + geom_path(col = "pink", lwd = 2) + geom_point(aes(x = age, y = value, col = sex), data = scott_long %>% filter(BLMD == "LD")) + geom_path(aes(x = age, y = yhat), data = newxm, col = "blue", lwd = 2) + ggtitle("Scott Score - LD")
 
 
 ```
+
+## Dentin Ratio 
+```{r}
+ggplot(aes(x = age, y = DER, color = vital_status), data = dentin_long) + geom_point() + geom_smooth()
+
+library(lme4)
+mod_dentin_full <- lmer(DER ~ (age+I(age^2)+ I(age^3))*sex + (1|id) + (1|rater), data = dentin_long, REML = FALSE)
+
+mod_dentin_red <- lmer(DER ~ (age+I(age^2)+ I(age^3)) + (1|id) + (1|rater), data = dentin_long, REML = FALSE)
+
+#Test stat
+-2*(logLik(mod_dentin_red) - logLik(mod_dentin_full))
+#p-value
+1 - pchisq(-2*(logLik(mod_dentin_red) - logLik(mod_dentin_full)),4)
+
+summary(mod_dentin_full)
+plot(mod_dentin_full)
+confint(mod_dentin_full)
+
+newx <- data.frame(age = 42:400, sex = "female")
+newx$yhat <- (predict(mod_dentin_full, newdata = newx, re.form = ~0))
+
+newxm <- data.frame(age = 42:300, sex = "male")
+newxm$yhat <- (predict(mod_dentin_full, newdata = newxm, re.form = ~0))
+
+ggplot(aes(x = age, y = yhat), data = newx) +
+  geom_point(aes(x = age, y = DER, col = sex), data = dentin_long) + geom_path(col = "pink", lwd = 2)  + geom_path(aes(x = age, y = yhat), data = newxm, col = "blue", lwd = 2)
+
+
+##ICC analysis 
+## Only use death and cast ages
+mod_dentin_full <- lmer(DER ~ (age+I(age^2)+ I(age^3))*sex + (1|id) + (1|rater), data = dentin_long %>% filter(vital_status %in% c("death","life")) , REML = FALSE)
+
+mod_dentin_red <- lmer(DER ~ (age+I(age^2)+ I(age^3)) + (1|id) + (1|rater), data = dentin_long %>% filter(vital_status %in% c("death","life")), REML = FALSE)
+
+
+(VarCorr(mod_dentin_full)$rater[1])/(VarCorr(mod_dentin_full)$rater[1]+attr(VarCorr(mod_dentin_full),"sc"))
+
+(VarCorr(mod_dentin_full)$id[1])/(VarCorr(mod_dentin_full)$id[1]+attr(VarCorr(mod_dentin_full),"sc"))
+
+```
+
 
 # Are there any patterns for rate of wear? That is, is there a standard wear through time (by month or year), or are some baboons wearing their teeth down faster that what we might expect?
 
 # Pava
 
+## Dentin ratio
+
 ```{r}
 #Overall 
 library(Iso)
+#Isotonic regression for BM.  
+#Separate curves for male and female.  
+sub <- dentin_long %>% filter(sex == "male") %>% arrange(age) 
+y <- dentin_long %>% filter( sex == "male") %>% arrange(age) %>% pull(DER)
+sub$isoy <- pava(y)
+submale <- sub
+
+sub <- dentin_long %>% filter( sex == "female") %>% arrange(age)
+y <- dentin_long %>% filter(sex == "female") %>% arrange(age) %>% pull(DER)
+sub$isoy <- pava(y)
+subfemale <- sub
+
+sub_dentin <- rbind(submale, subfemale)
+
+ggplot(aes(x = age, y = DER, color = sex), data = sub_dentin) + geom_point(alpha = 0.5) + geom_path(aes(x = age, y = isoy), data = sub_dentin, lwd = 2) + ggtitle("Dentin Ratio")
+```
+
+
+## Scott scores
+
+## Scott scores summed across locations
+```{r}
+#Overall 
+library(Iso)
+
+#Isotonic regression for overall
+scott_long_sum <- scott_long %>% group_by(id, castost, age, sex) %>% summarize(value = sum(value)) 
+
+#Separate curves for male and female.  
+sub <- scott_long_sum %>% filter(sex == "male") %>% arrange(age) 
+y <- scott_long_sum %>% filter(sex == "male") %>% arrange(age) %>% pull(value)
+sub$isoy <- pava(y)
+submale <- sub
+
+sub <- scott_long_sum %>% filter(sex == "female") %>% arrange(age)
+y <- scott_long_sum %>% filter(sex == "female") %>% arrange(age) %>% pull(value)
+sub$isoy <- pava(y)
+subfemale <- sub
+
+suball <- rbind(submale, subfemale)
+
+ggplot(aes(x = age, y = value, color = sex), data = suball) + geom_point(alpha = 0.5) + geom_path(aes(x = age, y = isoy), data = suball, lwd = 2) + ggtitle("overall") + ylim(0,40)
+```
+
+
+## Individual locations 
+
+```{r}
+
+library(Iso)
+
+#Isotonic regression for BM.  
+#Separate curves for male and female.  
 type <- "BM"
-sub <- scott_long %>% filter(BLMD == type) %>% arrange(age) 
-y <- scott_long %>% filter(BLMD == type) %>% arrange(age) %>% pull(value)
+sub <- scott_long %>% filter(BLMD == type & sex == "male") %>% arrange(age) 
+y <- scott_long %>% filter(BLMD == type & sex == "male") %>% arrange(age) %>% pull(value)
 sub$isoy <- pava(y)
-ggplot(aes(x = age, y = value), data = sub) + geom_point() + geom_path(aes(x = age, y = isoy), data = sub, color = "red") + ggtitle(type)
+submale <- sub
 
+sub <- scott_long %>% filter(BLMD == type & sex == "female") %>% arrange(age)
+y <- scott_long %>% filter(BLMD == type & sex == "female") %>% arrange(age) %>% pull(value)
+sub$isoy <- pava(y)
+subfemale <- sub
+
+subBM <- rbind(submale, subfemale)
+
+ggplot(aes(x = age, y = value, color = sex), data = subBM) + geom_point(alpha = 0.5) + geom_path(aes(x = age, y = isoy), data = subBM, lwd = 2) + ggtitle(type)
+
+#Isotonic regression for BD.  
+#Separate curves for male and female.  
 type <- "BD"
-sub <- scott_long %>% filter(BLMD == type) %>% arrange(age) 
-y <- scott_long %>% filter(BLMD == type) %>% arrange(age) %>% pull(value)
+sub <- scott_long %>% filter(BLMD == type & sex == "male") %>% arrange(age) 
+y <- scott_long %>% filter(BLMD == type & sex == "male") %>% arrange(age) %>% pull(value)
 sub$isoy <- pava(y)
-ggplot(aes(x = age, y = value), data = sub) + geom_point() + geom_path(aes(x = age, y = isoy), data = sub, color = "red") + ggtitle(type)
+submale <- sub
 
-type <- "LM"
-sub <- scott_long %>% filter(BLMD == type) %>% arrange(age) 
-y <- scott_long %>% filter(BLMD == type) %>% arrange(age) %>% pull(value)
+sub <- scott_long %>% filter(BLMD == type & sex == "female") %>% arrange(age)
+y <- scott_long %>% filter(BLMD == type & sex == "female") %>% arrange(age) %>% pull(value)
 sub$isoy <- pava(y)
-ggplot(aes(x = age, y = value), data = sub) + geom_point() + geom_path(aes(x = age, y = isoy), data = sub, color = "red") + ggtitle(type)
+subfemale <- sub
 
+subBD <- rbind(submale, subfemale)
+
+ggplot(aes(x = age, y = value, color = sex), data = subBD) + geom_point(alpha = 0.5) + geom_path(aes(x = age, y = isoy), data = subBD, lwd = 2) + ggtitle(type)
+
+#Isotonic regression for LD.  
+#Separate curves for male and female.  
 type <- "LD"
-sub <- scott_long %>% filter(BLMD == type) %>% arrange(age) 
-y <- scott_long %>% filter(BLMD == type) %>% arrange(age) %>% pull(value)
+sub <- scott_long %>% filter(BLMD == type & sex == "male") %>% arrange(age) 
+y <- scott_long %>% filter(BLMD == type & sex == "male") %>% arrange(age) %>% pull(value)
 sub$isoy <- pava(y)
-ggplot(aes(x = age, y = value), data = sub) + geom_point() + geom_path(aes(x = age, y = isoy), data = sub, color = "red") + ggtitle(type)
+submale <- sub
+
+sub <- scott_long %>% filter(BLMD == type & sex == "female") %>% arrange(age)
+y <- scott_long %>% filter(BLMD == type & sex == "female") %>% arrange(age) %>% pull(value)
+sub$isoy <- pava(y)
+subfemale <- sub
+
+subLD <- rbind(submale, subfemale)
+
+ggplot(aes(x = age, y = value, color = sex), data = subLD) + geom_point(alpha = 0.5) + geom_path(aes(x = age, y = isoy), data = subLD, lwd = 2) + ggtitle(type)
+
+
+#Isotonic regression for LM.  
+#Separate curves for male and female.  
+type <- "LM"
+sub <- scott_long %>% filter(BLMD == type & sex == "male") %>% arrange(age) 
+y <- scott_long %>% filter(BLMD == type & sex == "male") %>% arrange(age) %>% pull(value)
+sub$isoy <- pava(y)
+submale <- sub
+
+sub <- scott_long %>% filter(BLMD == type & sex == "female") %>% arrange(age)
+y <- scott_long %>% filter(BLMD == type & sex == "female") %>% arrange(age) %>% pull(value)
+sub$isoy <- pava(y)
+subfemale <- sub
+
+subLM <- rbind(submale, subfemale)
+
+ggplot(aes(x = age, y = value, color = sex), data = subLM) + geom_point(alpha = 0.5) + geom_path(aes(x = age, y = isoy), data = subLM, lwd = 2) + ggtitle(type)
+
+
+
+suball <- rbind(subBM, subBD, subLM, subLD)
+
+# ggplot() + geom_point(aes(y = value, x = age, color = sex),data = suball,alpha = 0.5) + geom_path(aes(x = age, y = isoy, color = sex), data = suball, lwd = 2) + facet_grid(BL~MD)
+
+suball <- suball %>% mutate(BLword = case_when(BL == "B" ~ "Buccal",
+                                     BL == "L" ~ "Lingual"),
+                            MDword = case_when(MD == "M" ~ "Mesial",
+                                     MD == "D" ~ "Distal"))
+
+
+pdf(file = "/Users/gregorymatthews/Dropbox/baboon_git/isotonic.pdf", h = 5, w = 5, pointsize = 1/600)
+ggplot() + geom_point(aes(y = value, x = age, color = sex),data = suball, size = 0.5) + geom_path(aes(x = age, y = isoy, color = sex), data = suball, lwd = 2) + facet_grid(MD~BL) + theme_bw() + ylab("Scott Score") + xlab("Age (Months)") + scale_colour_manual(
+  values = c("#F8766D","#00BFC4"),
+  labels = c( "Female","Male")
+)
+dev.off()
+
+pdf(file = "/Users/gregorymatthews/Dropbox/baboon_git/isotonic_qword.pdf", h = 5, w = 5, pointsize = 1/600)
+ggplot() + geom_point(aes(y = value, x = age, color = sex),data = suball,size = 0.5) + geom_path(aes(x = age, y = isoy, color = sex), data = suball, lwd = 2) + facet_grid(MDword~BLword) + theme_bw() + ylab("Scott Score") + xlab("Age (Months)") + scale_colour_manual(
+  values = c("#F8766D","#00BFC4"),
+  labels = c( "Female","Male")
+)
+dev.off()
+
+
+# 
+# type <- "BD"
+# sub <- scott_long %>% filter(BLMD == type) %>% arrange(age) 
+# y <- scott_long %>% filter(BLMD == type) %>% arrange(age) %>% pull(value)
+# sub$isoy <- pava(y)
+# ggplot(aes(x = age, y = value), data = sub) + geom_point() + geom_path(aes(x = age, y = isoy), data = sub, color = "red") + ggtitle(type)
+# 
+# type <- "LM"
+# sub <- scott_long %>% filter(BLMD == type) %>% arrange(age) 
+# y <- scott_long %>% filter(BLMD == type) %>% arrange(age) %>% pull(value)
+# sub$isoy <- pava(y)
+# ggplot(aes(x = age, y = value), data = sub) + geom_point() + geom_path(aes(x = age, y = isoy), data = sub, color = "red") + ggtitle(type)
+# 
+# type <- "LD"
+# sub <- scott_long %>% filter(BLMD == type) %>% arrange(age) 
+# y <- scott_long %>% filter(BLMD == type) %>% arrange(age) %>% pull(value)
+# sub$isoy <- pava(y)
+# ggplot(aes(x = age, y = value), data = sub) + geom_point() + geom_path(aes(x = age, y = isoy), data = sub, color = "red") + ggtitle(type)
 
 ```
 
@@ -535,6 +804,24 @@ ggplot(aes(x = age, y = value), data = sub) + geom_point() + geom_path(aes(x = a
 <!-- quang <- gcreg:::constrained_lmm_em(model = md, tol = 0.1, verbose = T, save_steps = F) -->
 
 <!-- ``` -->
+
+#Comparing scott and DER
+```{r}
+#sum the scott scorres
+#Average the dentin across raters.
+#merge the scottt and DER data
+#Plot scott vs DER.  
+
+scott_long_sum <- scott_long %>% group_by(id, castost, age, sex) %>% summarize(value = sum(value))
+
+dentin_long_sum <- dentin_long %>% group_by(id, age) %>% summarize(DER = mean(DER))
+
+merg <- scott_long_sum %>% left_join(dentin_long_sum, by = c("id", "age"))
+
+ggplot(aes(x = value, y = DER),data = merg) + geom_point() + xlab("Krueger-Scott Score") + geom_smooth() + theme_bw()
+
+ggplot(aes(x = value, y = DER),data = merg) + geom_point() + xlab("Krueger-Scott Score") + geom_smooth() + theme_bw() + facet_grid(~sex)
+```
 
 # Notes for Greg
 
