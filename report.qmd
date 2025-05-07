@@ -89,6 +89,28 @@ dentin_long <-  bind_rows(dentin_long, dentin_long %>% filter(vital_status == "d
 dentin_long <- dentin_long %>% filter(id != 187) 
 scott <- scott %>% filter(id != 187) 
 
+
+
+```
+# Summary statistics 
+```{r}
+library(tidyverse)
+scott <- scott %>% mutate(diff = age_death - age_cast)
+
+#by sex
+scott %>% group_by(sex) %>% 
+  summarize(n = n(),
+            mean_age_cast = mean(age_cast),
+            mean_age_death = mean(age_death),
+            mean_diff = mean(diff)) %>% as.data.frame()
+
+#overall 
+scott  %>% 
+  summarize(n = n(),
+            mean_age_cast = mean(age_cast),
+            mean_age_death = mean(age_death),
+            mean_diff = mean(diff))
+
 ```
 
 
