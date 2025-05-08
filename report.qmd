@@ -93,6 +93,7 @@ scott <- scott %>% filter(id != 187)
 
 ```
 # Summary statistics 
+
 ```{r}
 library(tidyverse)
 scott <- scott %>% mutate(diff = age_death - age_cast)
@@ -110,6 +111,8 @@ scott  %>%
             mean_age_cast = mean(age_cast),
             mean_age_death = mean(age_death),
             mean_diff = mean(diff))
+
+
 
 ```
 
@@ -200,6 +203,17 @@ ggplot() + geom_path(alpha = 0.5,aes(
   y = value,
   color = sex
 ), data = scott_long, color = "black") + facet_grid(BL~MD + sex)
+```
+
+## Average and standard deviation of scott scores by quadrant 
+
+```{r}
+library(tidyverse)
+scott_long %>% filter(castost != "eruption") %>% group_by(sex, castost, BLMD) %>% summarize(mean = mean(value), sd = sd(value))
+
+library(tidyverse)
+scott_long %>% filter(castost != "eruption") %>% group_by(castost, BLMD) %>% summarize(mean = mean(value), sd = sd(value))
+
 ```
 
 ## Age distributions by measurement time.
@@ -444,9 +458,17 @@ Need to uses REML = FALSE to compare model.  Reason why:   -https://stats.stacke
 library(lme4)
 scott_long_sum <- scott_long %>% group_by(id, castost, age, sex) %>% summarize(value = sum(value)) 
 
+scott_long_sum %>% group_by(castost, sex) %>% summarize(mean = mean(value), std = sd(value))
+
+scott_long_sum %>% group_by(castost) %>% summarize(mean = mean(value), std = sd(value))
+
 mod_all_full <- lmer(value ~ (age+I(age^2) + I(age^3))*sex + (1|id), data = scott_long_sum, REML = FALSE)
 
 mod_all_red <- lmer(value ~ (age+I(age^2)+ I(age^3)) + (1|id), data = scott_long_sum, REML = FALSE)
+
+#ICC Ovrall
+(VarCorr(mod_all_full)$id[1])/(VarCorr(mod_all_full)$id[1]+attr(VarCorr(mod_all_full),"sc")^2)
+
 
 #test stat
 -2*(logLik(mod_all_red) - logLik(mod_all_full))
@@ -474,6 +496,9 @@ mod_bm <- lmer(value ~ (age+I(age^2) + I(age^3))*sex + (1|id), data = scott_long
 
 mod_bm_red <- lmer(value ~ (age+I(age^2)+ I(age^3)) + (1|id), data = scott_long %>% filter(BLMD == "BM"), REML = FALSE)
 
+#ICC BM
+(VarCorr(mod_bm)$id[1])/(VarCorr(mod_bm)$id[1]+attr(VarCorr(mod_bm),"sc")^2)
+
 #test stat
 -2*(logLik(mod_bm_red) - logLik(mod_bm))
 #p-value
@@ -499,6 +524,9 @@ library(lme4)
 mod_bd <- lmer(value ~ (age+I(age^2)+ I(age^3))*sex + (1|id), data = scott_long %>% filter(BLMD == "BD"), REML = FALSE)
 
 mod_bd_red <- lmer(value ~ (age+I(age^2)+ I(age^3)) + (1|id), data = scott_long %>% filter(BLMD == "BD"), REML = FALSE)
+
+#ICC BD
+(VarCorr(mod_bd)$id[1])/(VarCorr(mod_bd)$id[1]+attr(VarCorr(mod_bd),"sc")^2)
 
 #Test stat
 -2*(logLik(mod_bd_red) - logLik(mod_bd))
@@ -528,6 +556,9 @@ mod_lm <- lmer(value ~ (age+I(age^2)+ I(age^3))*sex + (1|id), data = scott_long 
 
 mod_lm_red <- lmer(value ~ (age+I(age^2)+ I(age^3)) + (1|id), data = scott_long %>% filter(BLMD == "LM"), REML = FALSE)
 
+#ICC LM
+(VarCorr(mod_lm)$id[1])/(VarCorr(mod_lm)$id[1]+attr(VarCorr(mod_lm),"sc")^2)
+
 #test stat
 -2*(logLik(mod_lm_red) - logLik(mod_lm))
 #p-value
@@ -553,6 +584,9 @@ library(lme4)
 mod_ld <- lmer(value ~ (age+I(age^2)+ I(age^3))*sex + (1|id), data = scott_long %>% filter(BLMD == "LD"), REML = FALSE)
 
 mod_ld_red <- lmer(value ~ (age+I(age^2)+ I(age^3)) + (1|id), data = scott_long %>% filter(BLMD == "LD"), REML = FALSE)
+
+#ICC LD
+(VarCorr(mod_ld)$id[1])/(VarCorr(mod_ld)$id[1]+attr(VarCorr(mod_ld),"sc")^2)
 
 #Test stat
 -2*(logLik(mod_ld_red) - logLik(mod_ld))
@@ -583,6 +617,13 @@ mod_dentin_full <- lmer(DER ~ (age+I(age^2)+ I(age^3))*sex + (1|id) + (1|rater),
 
 mod_dentin_red <- lmer(DER ~ (age+I(age^2)+ I(age^3)) + (1|id) + (1|rater), data = dentin_long, REML = FALSE)
 
+#Summary stats for dentin
+#Buy sex
+dentin_long %>% group_by(id, vital_status, sex) %>% summarize(DER = mean(DER)) %>% ungroup() %>% group_by(vital_status, sex) %>% summarize(mean = mean(DER), std = sd(DER))
+
+#Overall 
+dentin_long %>% group_by(id, vital_status, sex) %>% summarize(DER = mean(DER)) %>% ungroup() %>% group_by(vital_status) %>% summarize(mean = mean(DER), std = sd(DER))
+
 #Test stat
 -2*(logLik(mod_dentin_red) - logLik(mod_dentin_full))
 #p-value
@@ -591,6 +632,12 @@ mod_dentin_red <- lmer(DER ~ (age+I(age^2)+ I(age^3)) + (1|id) + (1|rater), data
 summary(mod_dentin_full)
 plot(mod_dentin_full)
 confint(mod_dentin_full)
+
+
+#ICC on model with eruption time point
+(VarCorr(mod_dentin_full)$rater[1])/(VarCorr(mod_dentin_full)$rater[1] + VarCorr(mod_dentin_full)$id[1] +attr(VarCorr(mod_dentin_full),"sc")^2)
+
+(VarCorr(mod_dentin_full)$id[1])/(VarCorr(mod_dentin_full)$rater[1] + VarCorr(mod_dentin_full)$id[1] +attr(VarCorr(mod_dentin_full),"sc")^2)
 
 newx <- data.frame(age = 42:400, sex = "female")
 newx$yhat <- (predict(mod_dentin_full, newdata = newx, re.form = ~0))
@@ -609,9 +656,9 @@ mod_dentin_full <- lmer(DER ~ (age+I(age^2)+ I(age^3))*sex + (1|id) + (1|rater),
 mod_dentin_red <- lmer(DER ~ (age+I(age^2)+ I(age^3)) + (1|id) + (1|rater), data = dentin_long %>% filter(vital_status %in% c("death","life")), REML = FALSE)
 
 
-(VarCorr(mod_dentin_full)$rater[1])/(VarCorr(mod_dentin_full)$rater[1]+attr(VarCorr(mod_dentin_full),"sc"))
+(VarCorr(mod_dentin_full)$rater[1])/(VarCorr(mod_dentin_full)$rater[1] + VarCorr(mod_dentin_full)$id[1] +attr(VarCorr(mod_dentin_full),"sc")^2)
 
-(VarCorr(mod_dentin_full)$id[1])/(VarCorr(mod_dentin_full)$id[1]+attr(VarCorr(mod_dentin_full),"sc"))
+(VarCorr(mod_dentin_full)$id[1])/(VarCorr(mod_dentin_full)$rater[1] + VarCorr(mod_dentin_full)$id[1] +attr(VarCorr(mod_dentin_full),"sc")^2)
 
 ```
 
