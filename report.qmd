@@ -98,6 +98,11 @@ scott <- scott %>% filter(id != 187)
 library(tidyverse)
 scott <- scott %>% mutate(diff = age_death - age_cast)
 
+qqnorm(scott$BM_cast - scott$BM_ost)
+qqnorm(scott$BD_cast - scott$BD_ost)
+qqnorm(scott$LM_cast - scott$LM_ost)
+qqnorm(scott$LD_cast - scott$LD_ost)
+
 #by sex
 scott %>% group_by(sex) %>% 
   summarize(n = n(),
@@ -135,7 +140,13 @@ m <- cor(scott[,c("BM_cast","BD_cast","LM_cast","LD_cast","BM_ost","BD_ost","LM_
 
 corrplot(m, method = 'square', order = 'AOE', addCoef.col = 'white')
 ```
-
+```{r}
+#Are the relationships linear?
+ggplot(aes(x = BM_cast, y = BM_ost), data = scott) + geom_point() + geom_smooth()
+ggplot(aes(x = BD_cast, y = BD_ost), data = scott) + geom_point() + geom_smooth()
+ggplot(aes(x = LM_cast, y = LM_ost), data = scott) + geom_point() + geom_smooth()
+ggplot(aes(x = LD_cast, y = LD_ost), data = scott) + geom_point() + geom_smooth()
+```
 Spearman correlations
 
 ```{r}
@@ -618,11 +629,43 @@ mod_dentin_full <- lmer(DER ~ (age+I(age^2)+ I(age^3))*sex + (1|id) + (1|rater),
 mod_dentin_red <- lmer(DER ~ (age+I(age^2)+ I(age^3)) + (1|id) + (1|rater), data = dentin_long, REML = FALSE)
 
 #Summary stats for dentin
-#Buy sex
+#By sex
 dentin_long %>% group_by(id, vital_status, sex) %>% summarize(DER = mean(DER)) %>% ungroup() %>% group_by(vital_status, sex) %>% summarize(mean = mean(DER), std = sd(DER))
 
 #Overall 
 dentin_long %>% group_by(id, vital_status, sex) %>% summarize(DER = mean(DER)) %>% ungroup() %>% group_by(vital_status) %>% summarize(mean = mean(DER), std = sd(DER))
+
+#comparing DER by sex
+library(lme4)
+library(lmerTest)
+mod_sex_life <- lmer(DER ~  sex + (1|rater) + (1|id), data = dentin_long %>% filter(vital_status == "life"))
+summary(mod_sex_life)
+
+mod_sex_death <- lmer(DER ~  sex + (1|rater) + (1|id), data = dentin_long %>% filter(vital_status == "death"))
+summary(mod_sex_death)
+
+
+#comparing DER by vital status
+library(lme4)
+mod1 <- lmer(DER ~  vital_status + (1|rater) + (1|id), data = dentin_long %>% filter(vital_status != "origin"))
+summary(mod1)
+
+#comparing DER by vital status using diff
+death <- dentin_long %>% filter(vital_status == "death") %>% select(id, rater, DER, vital_status)
+life <- dentin_long %>% filter(vital_status == "life") %>% select(id, rater, DER, vital_status)
+
+merg <- death %>% left_join(life, by = c("id","rater")) %>% mutate(diff = DER.x - DER.y)
+
+library(lmerTest)
+mod1 <- lmer(diff ~ 0 + (1|rater), data = merg)
+mod2 <- lmer(diff ~ 1 + (1|rater), data = merg)
+#Is the intercept significantly different than 0?
+anova(mod2, mod1)
+
+
+
+
+
 
 #Test stat
 -2*(logLik(mod_dentin_red) - logLik(mod_dentin_full))
