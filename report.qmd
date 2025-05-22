@@ -82,8 +82,8 @@ dentin_long$DER[dentin_long$id == 286 & dentin_long$rater == "a" & dentin_long$v
 #Create age variable
 dentin_long <- dentin_long %>% mutate(age = ifelse(vital_status == "death", age_death, age_cast))
 
-#Add in dentin wear of 0 at age 0.
-dentin_long <-  bind_rows(dentin_long, dentin_long %>% filter(vital_status == "death") %>% mutate(age = 0, vital_status = "origin", DER = 0))
+#Add in dentin wear of 0 at age 42.
+dentin_long <-  bind_rows(dentin_long, dentin_long %>% filter(vital_status == "death") %>% mutate(age = 42, vital_status = "origin", DER = 0))
 
 #remove id 187
 dentin_long <- dentin_long %>% filter(id != 187) 
@@ -92,6 +92,10 @@ scott <- scott %>% filter(id != 187)
 
 
 ```
+
+
+
+
 # Summary statistics 
 
 ```{r}
@@ -214,6 +218,14 @@ ggplot() + geom_path(alpha = 0.5,aes(
   y = value,
   color = sex
 ), data = scott_long, color = "black") + facet_grid(BL~MD + sex)
+```
+# Distribution of ages requested by reviewer
+```{r}
+#It would be good to know the distribution of male and female ages at cast and death or the distribution of the time between the two events. Knowing their means only does not allow the reader to evaluate whether or not the variation in the time between casting and death was similar in males and females.
+ggplot(aes(x = age, color = sex, fill = sex), data = scott_long %>% filter(castost != "eruption")) + geom_density(alpha = 0.5) + facet_wrap(sex~castost )
+
+ggplot(aes(x = diff, color = sex, fill = sex), data = scott %>% mutate(diff = age_death - age_cast)) + geom_histogram(alpha = 0.5) + xlab("Months from ost and cast") + facet_grid(sex~1)
+  
 ```
 
 ## Average and standard deviation of scott scores by quadrant 
@@ -489,6 +501,9 @@ mod_all_red <- lmer(value ~ (age+I(age^2)+ I(age^3)) + (1|id), data = scott_long
 summary(mod_all_full)
 plot(mod_all_full)
 confint(mod_all_full) 
+qqnorm(residuals(mod_all_full))
+hist(residuals(mod_all_full))
+shapiro.test(residuals(mod_all_full))
 
 newx <- data.frame(age = 42:400, sex = "female")
 newx$yhat <- (predict(mod_all_full, newdata = newx, re.form = ~0))
@@ -518,6 +533,8 @@ mod_bm_red <- lmer(value ~ (age+I(age^2)+ I(age^3)) + (1|id), data = scott_long 
 summary(mod_bm)
 plot(mod_bm)
 confint(mod_bm) 
+qqnorm(residuals(mod_bm))
+shapiro.test(residuals(mod_bm))
 
 newx <- data.frame(age = 42:400, sex = "female")
 newx$yhat <- (predict(mod_bm, newdata = newx, re.form = ~0))
@@ -546,7 +563,10 @@ mod_bd_red <- lmer(value ~ (age+I(age^2)+ I(age^3)) + (1|id), data = scott_long 
 
 summary(mod_bd)
 plot(mod_bd)
-confint(mod_bm)
+confint(mod_bd)
+qqnorm(residuals(mod_bd))
+shapiro.test(residuals(mod_bd))
+
 
 newx <- data.frame(age = 42:400, sex = "female")
 newx$yhat <- (predict(mod_bd, newdata = newx, re.form = ~0))
@@ -628,6 +648,8 @@ mod_dentin_full <- lmer(DER ~ (age+I(age^2)+ I(age^3))*sex + (1|id) + (1|rater),
 
 mod_dentin_red <- lmer(DER ~ (age+I(age^2)+ I(age^3)) + (1|id) + (1|rater), data = dentin_long, REML = FALSE)
 
+
+
 #Summary stats for dentin
 #By sex
 dentin_long %>% group_by(id, vital_status, sex) %>% summarize(DER = mean(DER)) %>% ungroup() %>% group_by(vital_status, sex) %>% summarize(mean = mean(DER), std = sd(DER))
@@ -667,20 +689,6 @@ anova(mod2, mod1)
 
 
 
-#Test stat
--2*(logLik(mod_dentin_red) - logLik(mod_dentin_full))
-#p-value
-1 - pchisq(-2*(logLik(mod_dentin_red) - logLik(mod_dentin_full)),4)
-
-summary(mod_dentin_full)
-plot(mod_dentin_full)
-confint(mod_dentin_full)
-
-
-#ICC on model with eruption time point
-(VarCorr(mod_dentin_full)$rater[1])/(VarCorr(mod_dentin_full)$rater[1] + VarCorr(mod_dentin_full)$id[1] +attr(VarCorr(mod_dentin_full),"sc")^2)
-
-(VarCorr(mod_dentin_full)$id[1])/(VarCorr(mod_dentin_full)$rater[1] + VarCorr(mod_dentin_full)$id[1] +attr(VarCorr(mod_dentin_full),"sc")^2)
 
 newx <- data.frame(age = 42:400, sex = "female")
 newx$yhat <- (predict(mod_dentin_full, newdata = newx, re.form = ~0))
@@ -694,9 +702,9 @@ ggplot(aes(x = age, y = yhat), data = newx) +
 
 ##ICC analysis 
 ## Only use death and cast ages
-mod_dentin_full <- lmer(DER ~ (age+I(age^2)+ I(age^3))*sex + (1|id) + (1|rater), data = dentin_long %>% filter(vital_status %in% c("death","life")) , REML = FALSE)
+mod_dentin_full <- lmer(DER ~ (age+I(age^2)+ I(age^3))*sex + (1|id) + (1|rater), data = dentin_long, REML = FALSE)
 
-mod_dentin_red <- lmer(DER ~ (age+I(age^2)+ I(age^3)) + (1|id) + (1|rater), data = dentin_long %>% filter(vital_status %in% c("death","life")), REML = FALSE)
+#mod_dentin_red <- lmer(DER ~ (age+I(age^2)+ I(age^3)) + (1|id) + (1|rater), data = dentin_long %>% filter(vital_status %in% c("death","life")), REML = FALSE)
 
 
 (VarCorr(mod_dentin_full)$rater[1])/(VarCorr(mod_dentin_full)$rater[1] + VarCorr(mod_dentin_full)$id[1] +attr(VarCorr(mod_dentin_full),"sc")^2)
@@ -715,7 +723,6 @@ mod_dentin_red <- lmer(DER ~ (age+I(age^2)+ I(age^3)) + (1|id) + (1|rater), data
 ```{r}
 #Overall 
 library(Iso)
-#Isotonic regression for BM.  
 #Separate curves for male and female.  
 sub <- dentin_long %>% filter(sex == "male") %>% arrange(age) 
 y <- dentin_long %>% filter( sex == "male") %>% arrange(age) %>% pull(DER)
@@ -729,7 +736,14 @@ subfemale <- sub
 
 sub_dentin <- rbind(submale, subfemale)
 
-ggplot(aes(x = age, y = DER, color = sex), data = sub_dentin) + geom_point(alpha = 0.5) + geom_path(aes(x = age, y = isoy), data = sub_dentin, lwd = 2) + ggtitle("Dentin Ratio")
+ggplot(aes(x = age, y = DER, color = sex), data = sub_dentin) + geom_point(alpha = 0.5) + geom_path(aes(x = age, y = isoy), data = sub_dentin, lwd = 2) + ggtitle("Dentin Ratio") + theme_bw()
+
+pdf(file = "/Users/gregorymatthews/Dropbox/baboon_git/isotonic_dentin_qword.pdf", h = 5, w = 5, pointsize = 1/600)
+ggplot() + geom_point(aes(y = DER, x = age, color = sex),data = sub_dentin,size = 0.5) + geom_path(aes(x = age, y = isoy, color = sex), data = sub_dentin, lwd = 2) + theme_bw() + ylab("Dentin Ratio") + xlab("Age (Months)") + scale_colour_manual(
+  values = c("#F8766D","#00BFC4"),
+  labels = c( "Female","Male")
+)
+dev.off()
 ```
 
 
@@ -757,6 +771,13 @@ subfemale <- sub
 suball <- rbind(submale, subfemale)
 
 ggplot(aes(x = age, y = value, color = sex), data = suball) + geom_point(alpha = 0.5) + geom_path(aes(x = age, y = isoy), data = suball, lwd = 2) + ggtitle("overall") + ylim(0,40)
+
+pdf(file = "/Users/gregorymatthews/Dropbox/baboon_git/isotonic_scottsum_qword.pdf", h = 5, w = 5, pointsize = 1/600)
+ggplot() + geom_point(aes(y = value, x = age, color = sex),data = suball,size = 0.5) + geom_path(aes(x = age, y = isoy, color = sex), data = suball, lwd = 2) + theme_bw() + ylab("Sum of Krueger-Scott Score") + xlab("Age (Months)") + scale_colour_manual(
+  values = c("#F8766D","#00BFC4"),
+  labels = c( "Female","Male")
+)
+dev.off()
 ```
 
 
@@ -846,16 +867,18 @@ suball <- suball %>% mutate(BLword = case_when(BL == "B" ~ "Buccal",
                             MDword = case_when(MD == "M" ~ "Mesial",
                                      MD == "D" ~ "Distal"))
 
+suball$MDword <- factor(suball$MDword, levels = c("Mesial","Distal"))
+
 
 pdf(file = "/Users/gregorymatthews/Dropbox/baboon_git/isotonic.pdf", h = 5, w = 5, pointsize = 1/600)
-ggplot() + geom_point(aes(y = value, x = age, color = sex),data = suball, size = 0.5) + geom_path(aes(x = age, y = isoy, color = sex), data = suball, lwd = 2) + facet_grid(MD~BL) + theme_bw() + ylab("Scott Score") + xlab("Age (Months)") + scale_colour_manual(
+ggplot() + geom_point(aes(y = value, x = age, color = sex),data = suball, size = 0.5) + geom_path(aes(x = age, y = isoy, color = sex), data = suball, lwd = 2) + facet_grid(MD~BL) + theme_bw() + ylab("Krueger-Scott Score") + xlab("Age (Months)") + scale_colour_manual(
   values = c("#F8766D","#00BFC4"),
   labels = c( "Female","Male")
 )
 dev.off()
 
 pdf(file = "/Users/gregorymatthews/Dropbox/baboon_git/isotonic_qword.pdf", h = 5, w = 5, pointsize = 1/600)
-ggplot() + geom_point(aes(y = value, x = age, color = sex),data = suball,size = 0.5) + geom_path(aes(x = age, y = isoy, color = sex), data = suball, lwd = 2) + facet_grid(MDword~BLword) + theme_bw() + ylab("Scott Score") + xlab("Age (Months)") + scale_colour_manual(
+ggplot() + geom_point(aes(y = value, x = age, color = sex),data = suball,size = 0.5) + geom_path(aes(x = age, y = isoy, color = sex), data = suball, lwd = 2) + facet_grid(MDword~BLword) + theme_bw() + ylab("Krueger-Scott Score") + xlab("Age (Months)") + scale_colour_manual(
   values = c("#F8766D","#00BFC4"),
   labels = c( "Female","Male")
 )
